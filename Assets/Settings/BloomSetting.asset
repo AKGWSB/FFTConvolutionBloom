@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a8980054c5ac6e41bd1b18339cf62e1, type: 3}
+  m_Name: BloomSetting
+  m_EditorClassIdentifier: 
+  KernelGenerateMaterial: {fileID: 2100000, guid: 1cf42a0dca9483e4da768971395fa27c,
+    type: 2}
+  SourceGenerateMaterial: {fileID: 2100000, guid: 55c5871186a5ef442a97babaa477c9b2,
+    type: 2}
+  FinalBlitMaterial: {fileID: 2100000, guid: 4d3c8a1d626b05348845cb5279176c3d, type: 2}
+  KernelTexture: {fileID: 2800000, guid: db0e1f70ad96a474598e0f2748ac048f, type: 3}
+  FFTComputeShader: {fileID: 7200000, guid: 0c8c263c1180a1540a77f8e2ee203db9, type: 3}
+  Intensity: 1.37
+  Threshold: 13.23
+  KernelPositionOffset: {x: 0, y: 0}
+  KernelSizeScale: {x: 1, y: 1}
+  KernelDistanceExp: 0
+  KernelDistanceExpClampMin: 1
+  KernelDistanceExpScale: 1
+  KernelImageUseLuminanceAsRGB: 1
