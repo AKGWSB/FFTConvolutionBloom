@@ -7,6 +7,10 @@ Bloom using FFT to accelerate convolution, with Unity URP
 
 ![image-20230305231946900](README.assets/image-20230305231946900.png)
 
+# Reading Online
+
+https://zhuanlan.zhihu.com/p/611582936
+
 # Feature
 
 Two-for-one FFT
