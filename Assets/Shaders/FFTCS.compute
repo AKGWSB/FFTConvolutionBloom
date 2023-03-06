@@ -205,9 +205,9 @@ void TwoForOneFFTInverseHorizontal (uint3 id : SV_DispatchThreadID, uint3 tid : 
 
 // ---------------------------------------------------------------------------------- //
 
-#pragma kernel TwoForOneFFTForwardHorizontalRadix8
+#pragma kernel TwoForOneFFTForwardHorizontalRadix8_1_thread_8_signal
 [numthreads(SourceTextureSize/8,1,1)]
-void TwoForOneFFTForwardHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+void TwoForOneFFTForwardHorizontalRadix8_1_thread_8_signal (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
     uint threadIndex = tid.x;
     uint groupIndex = gid.x;
@@ -226,7 +226,7 @@ void TwoForOneFFTForwardHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 
     // 对 RG, BA 通道分别进行变换
     for(uint channel=0; channel<2; channel++)
     {
-        Radix8FFT(inputs[channel], threadIndex, true);
+        Radix8FFT_1_thread_8_signal(inputs[channel], threadIndex, true);
 
         // split two-for-one
         GroupMemoryBarrierWithGroupSync();
@@ -259,9 +259,9 @@ void TwoForOneFFTForwardHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 
 
 // ---------------------------------------------------------------------------------- //
 
-#pragma kernel FFTVerticalRadix8
+#pragma kernel FFTVerticalRadix8_1_thread_8_signal
 [numthreads(SourceTextureSize/8,1,1)]
-void FFTVerticalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+void FFTVerticalRadix8_1_thread_8_signal (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
     uint threadIndex = tid.x;
     uint groupIndex = gid.x;
@@ -286,7 +286,7 @@ void FFTVerticalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThre
     // 对 R, G, B, A 通道分别进行变换
     for(uint channel=0; channel<4; channel++)
     {
-        Radix8FFT(inputs[channel], threadIndex, IsForward > 0);
+        Radix8FFT_1_thread_8_signal(inputs[channel], threadIndex, IsForward > 0);
 
         GroupMemoryBarrierWithGroupSync();
         for(uint i=0; i<8; i++)
@@ -310,9 +310,9 @@ void FFTVerticalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThre
 
 // ---------------------------------------------------------------------------------- //
 
-#pragma kernel TwoForOneFFTInverseHorizontalRadix8
+#pragma kernel TwoForOneFFTInverseHorizontalRadix8_1_thread_8_signal
 [numthreads(SourceTextureSize/8,1,1)]
-void TwoForOneFFTInverseHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+void TwoForOneFFTInverseHorizontalRadix8_1_thread_8_signal (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
     uint threadIndex = tid.x;
     uint groupIndex = gid.x;
@@ -347,7 +347,7 @@ void TwoForOneFFTInverseHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 
             twoForOneInput[i] = Z_k;
         }
 
-        Radix8FFT(twoForOneInput, threadIndex, false);
+        Radix8FFT_1_thread_8_signal(twoForOneInput, threadIndex, false);
 
         // split two-for-one
         GroupMemoryBarrierWithGroupSync();
@@ -369,6 +369,132 @@ void TwoForOneFFTInverseHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 
         uint2 uv = uint2(threadIndex * 8 + i, groupIndex);
         FrequencyTexture[uv] = float4(outputs[0][i], outputs[1][i], outputs[2][i], outputs[3][i]);
     }
+}
+
+// ---------------------------------------------------------------------------------- //
+
+#pragma kernel TwoForOneFFTForwardHorizontalRadix8
+[numthreads(SourceTextureSize,1,1)]
+void TwoForOneFFTForwardHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+{
+    uint threadIndex = tid.x;
+    uint groupIndex = gid.x;
+    
+    Complex inputs[2];
+    Complex outputs[4];
+
+    float4 src = SourceTexture[uint2(threadIndex, groupIndex)];
+    inputs[0] = src.rg;
+    inputs[1] = src.ba;
+
+    // 对 RG, BA 通道分别进行变换
+    for(uint channel=0; channel<2; channel++)
+    {
+        Radix8FFT(inputs[channel], threadIndex, true);
+
+        GroupMemoryBarrierWithGroupSync();
+
+        // split two-for-one
+        uint rollIndex = (SourceTextureSize - threadIndex) % SourceTextureSize;
+
+        Complex Z_k = groupSharedBuffer[threadIndex] / float(sqrt(SourceTextureSize));
+        Complex Z_k_c = ComplexConjugate(groupSharedBuffer[rollIndex] / float(sqrt(SourceTextureSize)));
+
+        Complex X_k = (Z_k + Z_k_c) / 2;
+        Complex Y_k = ComplexMultiply(Complex(0, -1), (Z_k - Z_k_c) / 2);
+
+        outputs[channel * 2 + 0] = X_k;
+        outputs[channel * 2 + 1] = Y_k;
+    }
+
+    uint2 uvRG = uint2(threadIndex, groupIndex);
+    uint2 uvBA = uint2(uvRG.x + SourceTextureSize, uvRG.y);
+
+    FrequencyTexture[uvRG] = float4(outputs[0], outputs[1]);
+    FrequencyTexture[uvBA] = float4(outputs[2], outputs[3]);
+}
+
+// ---------------------------------------------------------------------------------- //
+
+#pragma kernel FFTVerticalRadix8
+[numthreads(SourceTextureSize,1,1)]
+void FFTVerticalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+{
+    uint threadIndex = tid.x;
+    uint groupIndex = gid.x;
+    
+    Complex inputs[4];
+    Complex outputs[4];
+
+    uint2 uvRG = uint2(groupIndex, threadIndex);
+    uint2 uvBA = uint2(groupIndex + SourceTextureSize, threadIndex);
+    float4 srcRG = FrequencyTexture[uvRG];
+    float4 srcBA = FrequencyTexture[uvBA];
+
+    inputs[0] = srcRG.rg;    // R
+    inputs[1] = srcRG.ba;    // G
+    inputs[2] = srcBA.rg;    // B
+    inputs[3] = srcBA.ba;    // A
+
+    // 对 R, G, B, A 通道分别进行变换
+    for(uint channel=0; channel<4; channel++)
+    {
+        Radix8FFT(inputs[channel], threadIndex, IsForward > 0);
+
+        GroupMemoryBarrierWithGroupSync();
+        Complex F_k = groupSharedBuffer[threadIndex] / float(sqrt(SourceTextureSize));
+        outputs[channel] = F_k;
+    }
+
+    FrequencyTexture[uvRG] = float4(outputs[0], outputs[1]);
+    FrequencyTexture[uvBA] = float4(outputs[2], outputs[3]);
+}
+
+// ---------------------------------------------------------------------------------- //
+
+#pragma kernel TwoForOneFFTInverseHorizontalRadix8
+[numthreads(SourceTextureSize,1,1)]
+void TwoForOneFFTInverseHorizontalRadix8 (uint3 id : SV_DispatchThreadID, uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+{
+    uint threadIndex = tid.x;
+    uint groupIndex = gid.x;
+    
+    Complex inputs[4];
+    float outputs[4];
+
+    uint2 uvRG = uint2(threadIndex, groupIndex);
+    uint2 uvBA = uint2(threadIndex + SourceTextureSize, groupIndex);
+    float4 srcRG = FrequencyTexture[uvRG];
+    float4 srcBA = FrequencyTexture[uvBA];
+
+    inputs[0] = srcRG.rg;    // R
+    inputs[1] = srcRG.ba;    // G
+    inputs[2] = srcBA.rg;    // B
+    inputs[3] = srcBA.ba;    // A
+
+    // 对 RG, BA 通道分别进行变换
+    for(uint channel=0; channel<2; channel++)
+    {
+        // merge two-for-one
+        Complex X_k = inputs[channel * 2 + 0];
+        Complex Y_k = inputs[channel * 2 + 1];
+        Complex Z_k = X_k + ComplexMultiply(Complex(0, 1), Y_k);
+
+        Radix8FFT(Z_k, threadIndex, false);
+
+        GroupMemoryBarrierWithGroupSync();
+
+        // split two-for-one
+        Complex z_n = groupSharedBuffer[threadIndex] / float(sqrt(SourceTextureSize));
+        float x_n = z_n.x;
+        float y_n = z_n.y;
+
+        outputs[channel * 2 + 0] = x_n;
+        outputs[channel * 2 + 1] = y_n;
+    }
+
+    uint2 uv = uint2(threadIndex, groupIndex);
+    FrequencyTexture[uv] = float4(outputs[0], outputs[1], outputs[2], outputs[3]);
 }
 
 // ---------------------------------------------------------------------------------- //

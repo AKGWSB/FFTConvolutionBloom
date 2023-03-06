@@ -79,37 +79,47 @@ public class ConvolutionBloom : ScriptableRendererFeature
 
             // 对卷积核做 FFT
             // 水平
-            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontalRadix8, "SourceTexture", m_kernelTexture);
-            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontalRadix8, "FrequencyTexture", m_kernelFrequencyTextureID);
-            cmd.DispatchCompute(cs, kTwoForOneFFTForwardHorizontalRadix8, 512, 1, 1); 
+            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontal, "SourceTexture", m_kernelTexture);
+            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontal, "FrequencyTexture", m_kernelFrequencyTextureID);
+            cmd.DispatchCompute(cs, kTwoForOneFFTForwardHorizontal, 512, 1, 1); 
             // 竖直
             cmd.SetComputeFloatParam(cs, "IsForward", 1.0f);
-            cmd.SetComputeTextureParam(cs, kFFTVerticalRadix8, "FrequencyTexture", m_kernelFrequencyTextureID);
-            cmd.DispatchCompute(cs, kFFTVerticalRadix8, 512, 1, 1); 
+            cmd.SetComputeTextureParam(cs, kFFTVertical, "FrequencyTexture", m_kernelFrequencyTextureID);
+            cmd.DispatchCompute(cs, kFFTVertical, 512, 1, 1); 
 
             // 对原图像做 FFT
             // 水平
-            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontalRadix8, "SourceTexture", m_sourceTexture);
-            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontalRadix8, "FrequencyTexture", m_sourceFrequencyTextureID);
-            cmd.DispatchCompute(cs, kTwoForOneFFTForwardHorizontalRadix8, 512, 1, 1); 
+            cmd.BeginSample("FFTForwardHorizontal");
+            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontal, "SourceTexture", m_sourceTexture);
+            cmd.SetComputeTextureParam(cs, kTwoForOneFFTForwardHorizontal, "FrequencyTexture", m_sourceFrequencyTextureID);
+            cmd.DispatchCompute(cs, kTwoForOneFFTForwardHorizontal, 512, 1, 1); 
+            cmd.EndSample("FFTForwardHorizontal");
             // 竖直
+            cmd.BeginSample("FFTForwardVertical");
             cmd.SetComputeFloatParam(cs, "IsForward", 1.0f);
-            cmd.SetComputeTextureParam(cs, kFFTVerticalRadix8, "FrequencyTexture", m_sourceFrequencyTextureID);
-            cmd.DispatchCompute(cs, kFFTVerticalRadix8, 512, 1, 1); 
+            cmd.SetComputeTextureParam(cs, kFFTVertical, "FrequencyTexture", m_sourceFrequencyTextureID);
+            cmd.DispatchCompute(cs, kFFTVertical, 512, 1, 1); 
+            cmd.EndSample("FFTForwardVertical");
 
             // 频域卷积
+            cmd.BeginSample("Convolution");
             cmd.SetComputeTextureParam(cs, kConvolution, "SourceFrequencyTexture", m_sourceFrequencyTextureID);
             cmd.SetComputeTextureParam(cs, kConvolution, "KernelFrequencyTexture", m_kernelFrequencyTextureID);
             cmd.DispatchCompute(cs, kConvolution, 512 / 8, 512 / 8, 1); 
+            cmd.EndSample("Convolution");
 
             // 还原原图像
             // 竖直
+            cmd.BeginSample("FFTInverseVertical");
             cmd.SetComputeFloatParam(cs, "IsForward", 0.0f);
-            cmd.SetComputeTextureParam(cs, kFFTVerticalRadix8, "FrequencyTexture", m_sourceFrequencyTextureID);
-            cmd.DispatchCompute(cs, kFFTVerticalRadix8, 512, 1, 1); 
+            cmd.SetComputeTextureParam(cs, kFFTVertical, "FrequencyTexture", m_sourceFrequencyTextureID);
+            cmd.DispatchCompute(cs, kFFTVertical, 512, 1, 1); 
+            cmd.EndSample("FFTInverseVertical");
             // 水平
-            cmd.SetComputeTextureParam(cs, kTwoForOneFFTInverseHorizontalRadix8, "FrequencyTexture", m_sourceFrequencyTextureID);
-            cmd.DispatchCompute(cs, kTwoForOneFFTInverseHorizontalRadix8, 512, 1, 1);       
+            cmd.BeginSample("FFTInverseHorizontal");
+            cmd.SetComputeTextureParam(cs, kTwoForOneFFTInverseHorizontal, "FrequencyTexture", m_sourceFrequencyTextureID);
+            cmd.DispatchCompute(cs, kTwoForOneFFTInverseHorizontal, 512, 1, 1);       
+            cmd.EndSample("FFTInverseHorizontal");
 
             // final blit
             cmd.Blit(m_sourceFrequencyTextureID, renderingData.cameraData.renderer.cameraColorTarget, BloomSettings.FinalBlitMaterial);

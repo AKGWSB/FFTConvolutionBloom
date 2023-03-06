@@ -47,6 +47,17 @@ uint GetInputIndexRadix8(uint index)
 	return (low3bits << 6) + (mid3bits << 3) + high3bits;
 }
 
+void SplitTwoForOne(in uint index, in Complex X_k, in Complex Y_k)
+{
+	uint rollIndex = (SourceTextureSize - index) % SourceTextureSize;
+
+	Complex Z_k = groupSharedBuffer[index] / float(sqrt(SourceTextureSize));
+	Complex Z_k_c = ComplexConjugate(groupSharedBuffer[rollIndex] / float(sqrt(SourceTextureSize)));
+
+	X_k = (Z_k + Z_k_c) / 2;
+	Y_k = ComplexMultiply(Complex(0, -1), (Z_k - Z_k_c) / 2);
+}
+
 Complex DFT(in Complex f_n, in uint index, in bool bIsForward)
 {
 	groupSharedBuffer[index] = f_n;
@@ -122,7 +133,7 @@ void TwoForOneFFTInverse(in Complex X_k, in Complex Y_k, in uint index, out floa
 	y_n = z_n.y;	// imag
 }
 
-void Radix8FFT(in Complex f_n[8], in uint threadIndex, in bool bIsForward)
+void Radix8FFT_1_thread_8_signal(in Complex f_n[8], in uint threadIndex, in bool bIsForward)
 {
 	GroupMemoryBarrierWithGroupSync();
 	for(uint i=0; i<8; i++)
@@ -188,6 +199,59 @@ void Radix8FFT(in Complex f_n[8], in uint threadIndex, in bool bIsForward)
 			uint index = threadIndex * 8 + s;
 			groupSharedBuffer[index] = F_ks[s];
 		}
+	}
+}
+
+void Radix8FFT(in Complex f_n, in uint index, in bool bIsForward)
+{
+	GroupMemoryBarrierWithGroupSync();
+	uint inputIndex = GetInputIndexRadix8(index);
+	groupSharedBuffer[inputIndex] = f_n;
+
+	// 将 8 个长度为 N/8 的序列合成为 1 个长度为 N 的序列
+	for(uint N=8; N<=SourceTextureSize; N*=8)
+	{
+		uint i = index % N;			
+		uint startIndex = index - i;	// 子序列起始下标		
+		uint w = i / (N / 8);			// 子序列序号
+		uint k = index % (N / 8);		// 取子序列的第几个元素
+		
+		GroupMemoryBarrierWithGroupSync();
+		Complex F_0_k = groupSharedBuffer[startIndex + 0 * (N/8) + k];
+		Complex F_1_k = groupSharedBuffer[startIndex + 1 * (N/8) + k];
+		Complex F_2_k = groupSharedBuffer[startIndex + 2 * (N/8) + k];
+		Complex F_3_k = groupSharedBuffer[startIndex + 3 * (N/8) + k];
+		Complex F_4_k = groupSharedBuffer[startIndex + 4 * (N/8) + k];
+		Complex F_5_k = groupSharedBuffer[startIndex + 5 * (N/8) + k];
+		Complex F_6_k = groupSharedBuffer[startIndex + 6 * (N/8) + k];
+		Complex F_7_k = groupSharedBuffer[startIndex + 7 * (N/8) + k];
+
+		Complex F_k = Complex(0, 0);
+		if(bIsForward)
+		{
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 0 * w), W_N_k(N, 0 * k)), F_0_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 1 * w), W_N_k(N, 1 * k)), F_1_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 2 * w), W_N_k(N, 2 * k)), F_2_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 3 * w), W_N_k(N, 3 * k)), F_3_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 4 * w), W_N_k(N, 4 * k)), F_4_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 5 * w), W_N_k(N, 5 * k)), F_5_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 6 * w), W_N_k(N, 6 * k)), F_6_k);
+			F_k += ComplexMultiply(ComplexMultiply(W_N_k(8, 7 * w), W_N_k(N, 7 * k)), F_7_k);
+		}
+		else
+		{
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 0 * w), W_N_k(N, 0 * k))), F_0_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 1 * w), W_N_k(N, 1 * k))), F_1_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 2 * w), W_N_k(N, 2 * k))), F_2_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 3 * w), W_N_k(N, 3 * k))), F_3_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 4 * w), W_N_k(N, 4 * k))), F_4_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 5 * w), W_N_k(N, 5 * k))), F_5_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 6 * w), W_N_k(N, 6 * k))), F_6_k);
+			F_k += ComplexMultiply(ComplexConjugate(ComplexMultiply(W_N_k(8, 7 * w), W_N_k(N, 7 * k))), F_7_k);
+		}
+
+		GroupMemoryBarrierWithGroupSync();
+		groupSharedBuffer[index] = F_k;
 	}
 }
 

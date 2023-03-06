@@ -71,7 +71,6 @@ Shader "ConvolutionBloom/KernelGenerate"
                 bool bUseLuminance = FFTBloomKernelGenParam1.w > 0.0f;
 
                 // 用来缩放那些不是 hdr 格式的滤波盒
-                float texSize = 512;
                 float dis = (1.0 - length(i.uv - float2(0.5, 0.5)));
                 float kernelScale = max(pow(dis, KernelDistanceExp) * KernelDistanceExpScale, KernelDistanceExpClampMin); 
 
